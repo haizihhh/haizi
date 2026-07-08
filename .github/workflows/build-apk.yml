@@ -49,7 +49,7 @@ jobs:
           with open(spec_path) as f:
               spec = f.read()
           m = re.search(r'hostpython3==(\d+\.\d+)', spec)
-          py_ver = m.group(1) if m else "3.11"
+          py_ver = m.group(1) if m else "3.10"
           print(f"Target Python version: {py_ver}")
 
           # Probe GitHub for latest existing patch tag (HEAD requests)
