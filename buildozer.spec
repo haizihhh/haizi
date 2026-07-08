@@ -59,6 +59,9 @@ p4a.branch = develop
 # (str) NDK version to use
 android.ndk = 25c
 
+# (bool) Accept Android SDK license (required for CI builds)
+android.accept_sdk_license = True
+
 # (bool) Use the Google Play Store (not needed for direct APK distribution)
 android.allow_backup = True
 
