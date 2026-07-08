@@ -68,7 +68,7 @@ def get_received_dir():
     """
     if kivy_platform == 'android':
         # Android: 保存到公共 Downloads/TrustChat 目录
-        return '/sdcard/Download/TrustChat'
+        return '/sdcard/TrustChat'
     else:
         return 'received_files'
 
@@ -316,6 +316,63 @@ class NetworkManager:
                 if self.running:
                     continue
                 break
+
+    # ========== 手动连接（供用户手动输入IP） ==========
+
+    def manual_connect(self, peer_ip):
+        """手动连接到指定IP，跳过UDP发现和IP大小判断"""
+        if self.connected:
+            return False, 'Already connected.'
+
+        self._notify_status(f'Connecting to {peer_ip}...')
+
+        with self._connect_lock:
+            if self.connected:
+                return False, 'Already connected.'
+
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(5.0)
+                sock.connect((peer_ip, CHAT_PORT))
+
+                handshake = json.dumps({'name': self.device_name})
+                sock.sendall(handshake.encode('utf-8'))
+
+                sock.settimeout(None)
+
+                self.tcp_socket = sock
+                self.peer_ip = peer_ip
+                self.peer_name = 'Manual'
+                self.connected = True
+
+                self._notify_status(f'Connected: {peer_ip}')
+                if self.on_connected:
+                    self.on_connected(self.peer_name, peer_ip)
+
+                threading.Thread(
+                    target=self._tcp_receive_loop,
+                    daemon=True,
+                    name=f'TCP-Receive-{peer_ip}'
+                ).start()
+
+                return True, 'Connected.'
+
+            except socket.timeout:
+                self._notify_status('Connection timed out. Retrying auto-discovery...')
+                return False, 'Connection timed out. Check the IP and try again.'
+
+            except ConnectionRefusedError:
+                self._notify_status('Connection refused. Retrying auto-discovery...')
+                return False, 'Connection refused. Is Trust Chat running on the other device?'
+
+            except OSError as e:
+                self._notify_status('Connection failed. Retrying auto-discovery...')
+                return False, f'Connection failed: {e}'
+
+            except Exception as e:
+                self._notify_status('Connection failed. Retrying auto-discovery...')
+                return False, f'Connection failed: {e}'
+
 
     # ========== TCP 客户端（主动连接） ==========
 
