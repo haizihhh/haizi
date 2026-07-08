@@ -23,13 +23,6 @@ jobs:
             pkg-config zlib1g-dev libncurses-dev cmake \
             libffi-dev libssl-dev python3-pip
 
-          # Ubuntu 24.04 ships libtool 2.4.7 which removed LT_SYS_SYMBOL_USCORE.
-          # p4a's libffi recipe needs this macro. Replace with libtool 2.4.6 from 22.04.
-          wget -q "http://archive.ubuntu.com/ubuntu/pool/main/libt/libtool/libtool_2.4.6-15build2_all.deb" \
-               -O /tmp/old-libtool.deb
-          sudo dpkg -i --force-depends /tmp/old-libtool.deb
-          rm /tmp/old-libtool.deb
-
       - name: Install Buildozer
         run: pip install buildozer
 
@@ -127,6 +120,30 @@ jobs:
               print(f"  Will try to build anyway...")
 
           print("\nReady to build.")
+
+          # ---- libffi: work around removed LT_SYS_SYMBOL_USCORE in libtool >= 2.4.7 ----
+          libffi_path = os.path.join(p4a_dir, "pythonforandroid", "recipes", "libffi", "__init__.py")
+          if os.path.exists(libffi_path):
+              with open(libffi_path) as f:
+                  content = f.read()
+              # Replace: shprint(sh.Command('./autogen.sh'), _env=env)
+              # With: inject stub macro, then run autogen.sh
+              old = "shprint(sh.Command('./autogen.sh'), _env=env)"
+              new = (
+                  "# Fix: libtool >= 2.4.7 removed LT_SYS_SYMBOL_USCORE\n"
+                  "        with open('m4/lt_sys_symbol_uscope.m4', 'w') as _f:\n"
+                  "            _f.write('AC_DEFUN([LT_SYS_SYMBOL_USCORE], [])\\n')\n"
+                  "        shprint(sh.Command('./autogen.sh'), _env=env)"
+              )
+              if old in content:
+                  content = content.replace(old, new)
+                  with open(libffi_path, 'w') as f:
+                      f.write(content)
+                  print("  PATCHED libffi: inject LT_SYS_SYMBOL_USCORE stub before autogen.sh")
+              else:
+                  print(f"  WARN libffi: could not find autogen.sh pattern")
+          else:
+              print("  SKIP libffi: recipe not found")
           PYEOF
 
           # Build APK
