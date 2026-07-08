@@ -54,15 +54,21 @@ jobs:
           for recipe in hostpython3 python3; do
             RECIPE_FILE="$P4A_DIR/pythonforandroid/recipes/$recipe/__init__.py"
             if [ -f "$RECIPE_FILE" ]; then
-              sed -i "s/version\\s*=\\s*['\"]${PY_VER}['\"]/version = '${FULL_VERSION}'/g" "$RECIPE_FILE"
+              # Replace version string regardless of current value (handles '3.11', '3.11.x', "3.11" etc.)
+              sed -i -E "s/(version\\s*=\\s*['\"])[^'\"]*(['\"])/\\1${FULL_VERSION}\\2/g" "$RECIPE_FILE"
               echo "Patched $recipe: version -> $FULL_VERSION"
             fi
           done
 
-          # Pre-accept Android SDK licenses
+          # Fix broken Android SDK (remove if sdkmanager is missing)
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
+          if [ -d "$SDK_DIR" ] && [ ! -f "$SDK_DIR/tools/bin/sdkmanager" ] && [ ! -f "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "SDK exists but sdkmanager is missing, removing broken SDK..."
+            rm -rf "$SDK_DIR"
+          fi
+
+          # Pre-accept Android SDK licenses
           mkdir -p "$SDK_DIR/licenses"
-          # SDK license hashes
           echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55" > "$SDK_DIR/licenses/android-sdk-license"
           echo -e "\nd56f5187479451eabf01fb78af6dfcb131a6481e" >> "$SDK_DIR/licenses/android-sdk-license"
           echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" >> "$SDK_DIR/licenses/android-sdk-license"
