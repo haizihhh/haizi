@@ -30,55 +30,97 @@ jobs:
         run: |
           set -e
 
-          # Get target Python version from buildozer.spec
-          PY_VER=$(grep -oP 'hostpython3==\K\d+\.\d+' buildozer.spec)
-          echo "Target Python version: $PY_VER"
+          # Remove broken pre-existing Android SDK/NDK
+          SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
+          [ -d "$SDK_DIR" ] && rm -rf "$SDK_DIR"
+          unset ANDROID_HOME ANDROID_SDK_ROOT
 
-          # Get latest patch version via GitHub API, with fallback
-          if [ "$PY_VER" = "3.11" ]; then
-            FULL_VERSION="3.11.11"
-          elif [ "$PY_VER" = "3.10" ]; then
-            FULL_VERSION="3.10.11"
-          elif [ "$PY_VER" = "3.12" ]; then
-            FULL_VERSION="3.12.8"
-          else
-            FULL_VERSION="${PY_VER}.11"
-          fi
-          echo "Full version: $FULL_VERSION"
-
-          # Pre-populate python-for-android at the WORKSPACE path that
-          # buildozer actually uses (not $HOME/.buildozer).
-          # Buildozer skips cloning if this directory already exists.
+          # Pre-populate p4a at the workspace path that buildozer uses,
+          # then patch recipes with a reliable Python script
           P4A_DIR=".buildozer/android/platform/python-for-android"
           mkdir -p "$(dirname "$P4A_DIR")"
-          if [ -d "$P4A_DIR" ]; then
-            echo "Removing stale p4a clone..."
-            rm -rf "$P4A_DIR"
-          fi
+          [ -d "$P4A_DIR" ] && rm -rf "$P4A_DIR"
           git clone --depth 1 -b develop https://github.com/kivy/python-for-android.git "$P4A_DIR"
 
-          for recipe in hostpython3 python3; do
-            RECIPE_FILE="$P4A_DIR/pythonforandroid/recipes/$recipe/__init__.py"
-            if [ -f "$RECIPE_FILE" ]; then
-              # Replace version string regardless of current value (handles '3.11', '3.11.x', "3.11" etc.)
-              sed -i -E "s/(version\\s*=\\s*['\"])[^'\"]*(['\"])/\\1${FULL_VERSION}\\2/g" "$RECIPE_FILE"
-              echo "Patched $recipe: version -> $FULL_VERSION"
-            fi
-          done
+          python3 << 'PYEOF'
+          import re, urllib.request, urllib.error, sys, os
 
-          # Remove any pre-existing Android SDK directory so buildozer
-          # downloads a fresh one. (mkdir in previous runs creates an
-          # empty dir that tricks buildozer into thinking SDK is installed.)
-          SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-          if [ -d "$SDK_DIR" ]; then
-            echo "Removing pre-existing Android SDK directory..."
-            rm -rf "$SDK_DIR"
-          fi
+          spec_path = "buildozer.spec"
+          with open(spec_path) as f:
+              spec = f.read()
+          m = re.search(r'hostpython3==(\d+\.\d+)', spec)
+          py_ver = m.group(1) if m else "3.11"
+          print(f"Target Python version: {py_ver}")
 
-          # Unset system Android SDK env vars to avoid conflicts with
-          # the pre-installed SDK on GitHub Actions runners
-          unset ANDROID_HOME
-          unset ANDROID_SDK_ROOT
+          # Probe GitHub for latest existing patch tag (HEAD requests)
+          full_version = None
+          print(f"Probing for latest {py_ver}.x tag...")
+          for patch in range(25, 0, -1):
+              test_ver = f"{py_ver}.{patch}"
+              url = f"https://github.com/python/cpython/archive/refs/tags/v{test_ver}.tar.gz"
+              try:
+                  req = urllib.request.Request(url, method="HEAD")
+                  req.add_header("User-Agent", "github-actions-buildozer")
+                  with urllib.request.urlopen(req, timeout=15) as resp:
+                      full_version = test_ver
+                      print(f"  Found: v{full_version}")
+                      break
+              except urllib.error.HTTPError as e:
+                  if e.code == 404:
+                      continue
+              except Exception as e:
+                  print(f"  Probe error at v{test_ver}: {e}")
+                  continue
+
+          if not full_version:
+              # Fallback versions for common Python releases
+              fallback = {"3.10": "3.10.16", "3.11": "3.11.15", "3.12": "3.12.11"}
+              full_version = fallback.get(py_ver, f"{py_ver}.11")
+              print(f"Fallback version: {full_version}")
+
+          # Patch hostpython3 and python3 recipes
+          p4a_dir = ".buildozer/android/platform/python-for-android"
+          for recipe_name in ["hostpython3", "python3"]:
+              recipe_path = os.path.join(p4a_dir, "pythonforandroid", "recipes", recipe_name, "__init__.py")
+              if not os.path.exists(recipe_path):
+                  print(f"  SKIP {recipe_name}: not found")
+                  continue
+
+              with open(recipe_path) as f:
+                  content = f.read()
+
+              old_ver = re.search(r"version\s*=\s*['\"]([^'\"]+)", content)
+              old_val = old_ver.group(1) if old_ver else "???"
+
+              # Replace version = '...' or version = "..."
+              new_content = re.sub(
+                  r"(version\s*=\s*['\"])[^'\"]*(['\"])",
+                  rf"\g<1>{full_version}\g<2>",
+                  content
+              )
+
+              with open(recipe_path, 'w') as f:
+                  f.write(new_content)
+
+              # Verify
+              v = re.search(r"version\s*=\s*['\"]([^'\"]+)", new_content)
+              new_val = v.group(1) if v else "FAILED"
+              print(f"  {recipe_name}: '{old_val}' -> '{new_val}'")
+
+          # Quick verify the download URL will work
+          test_url = f"https://github.com/python/cpython/archive/refs/tags/v{full_version}.tar.gz"
+          print(f"\nVerifying download URL: {test_url}")
+          try:
+              req = urllib.request.Request(test_url, method="HEAD")
+              req.add_header("User-Agent", "github-actions-buildozer")
+              with urllib.request.urlopen(req, timeout=15) as resp:
+                  print(f"  URL OK (HTTP {resp.status})")
+          except Exception as e:
+              print(f"  WARNING: URL check failed: {e}")
+              print(f"  Will try to build anyway...")
+
+          print("\nReady to build.")
+          PYEOF
 
           # Build APK
           export BUILDOZER_WARN_ON_ROOT=1

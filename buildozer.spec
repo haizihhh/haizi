@@ -50,8 +50,8 @@ android.minapi = 21
 # (int) NDK API
 android.ndk_api = 21
 
-# (str) The Android arch to build for
-android.arch = armeabi-v7a,arm64-v8a
+# (str) The Android archs to build for
+android.archs = armeabi-v7a,arm64-v8a
 
 # (str) python-for-android branch to use
 p4a.branch = develop
