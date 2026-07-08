@@ -194,6 +194,7 @@ jobs:
           PYEOF
 
           # Build APK
+          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
           export BUILDOZER_WARN_ON_ROOT=1
           buildozer android debug 2>&1
 
