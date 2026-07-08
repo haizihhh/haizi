@@ -60,18 +60,19 @@ jobs:
             fi
           done
 
-          # Fix broken Android SDK (remove if sdkmanager is missing)
+          # Remove any pre-existing Android SDK directory so buildozer
+          # downloads a fresh one. (mkdir in previous runs creates an
+          # empty dir that tricks buildozer into thinking SDK is installed.)
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-          if [ -d "$SDK_DIR" ] && [ ! -f "$SDK_DIR/tools/bin/sdkmanager" ] && [ ! -f "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" ]; then
-            echo "SDK exists but sdkmanager is missing, removing broken SDK..."
+          if [ -d "$SDK_DIR" ]; then
+            echo "Removing pre-existing Android SDK directory..."
             rm -rf "$SDK_DIR"
           fi
 
-          # Pre-accept Android SDK licenses
-          mkdir -p "$SDK_DIR/licenses"
-          echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55" > "$SDK_DIR/licenses/android-sdk-license"
-          echo -e "\nd56f5187479451eabf01fb78af6dfcb131a6481e" >> "$SDK_DIR/licenses/android-sdk-license"
-          echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" >> "$SDK_DIR/licenses/android-sdk-license"
+          # Unset system Android SDK env vars to avoid conflicts with
+          # the pre-installed SDK on GitHub Actions runners
+          unset ANDROID_HOME
+          unset ANDROID_SDK_ROOT
 
           # Build APK
           export BUILDOZER_WARN_ON_ROOT=1
