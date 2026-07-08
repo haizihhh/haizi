@@ -166,8 +166,8 @@ jobs:
               print("  SKIP libthorvg: recipe not found")
 
           # Patch p4a build.py: fix pip upgrade in venv
-          # The standard 'pip install -U pip' can corrupt pip's vendored resolvelib.
-          # Use ensurepip --upgrade + force-reinstall instead.
+          # pip install -U pip corrupts vendored resolvelib.
+          # Use get-pip.py for a clean pip install.
           build_py_path = os.path.join(p4a_dir, "pythonforandroid", "build.py")
           if os.path.exists(build_py_path):
               with open(build_py_path) as f:
@@ -176,14 +176,15 @@ jobs:
               old_pip_upgrade = '"source venv/bin/activate && pip install -U pip"'
               new_pip_upgrade = (
                   '"source venv/bin/activate && '
-                  'python -m ensurepip --upgrade && '
-                  'python -m pip install --force-reinstall --no-cache-dir pip setuptools wheel"'
+                  'python -c \\"from urllib.request import urlopen;'
+                  'exec(urlopen(\'https://bootstrap.pypa.io/get-pip.py\').read())\\"'
+                  ' pip==24.0"'
               )
               if old_pip_upgrade in build_py:
                   build_py = build_py.replace(old_pip_upgrade, new_pip_upgrade)
                   with open(build_py_path, 'w') as f:
                       f.write(build_py)
-                  print("  PATCHED p4a build.py: pip upgrade now uses ensurepip + force-reinstall")
+                  print("  PATCHED p4a build.py: pip upgrade now uses get-pip.py for clean install")
               else:
                   print("  WARNING: pip upgrade pattern not matched in build.py, skipping patch")
           else:
