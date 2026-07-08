@@ -32,7 +32,7 @@ from datetime import datetime
 
 # 添加当前目录到路径，确保可以导入 network 模块
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from network import NetworkManager, get_local_ip, get_device_name, format_file_size
+from network import NetworkManager, get_local_ip, get_device_name, format_file_size, get_received_dir
 
 # ============ 窗口设置 ============
 
@@ -501,7 +501,7 @@ class ChatScreen(BoxLayout):
             filename = msg.get('name', 'unknown_file')
             data = msg.get('data', b'')
 
-            save_dir = 'received_files'
+            save_dir = get_received_dir()
             os.makedirs(save_dir, exist_ok=True)
 
             filepath = os.path.join(save_dir, filename)

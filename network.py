@@ -22,6 +22,7 @@ import struct
 import time
 import os
 from datetime import datetime
+from kivy.utils import platform as kivy_platform
 
 # ============ 常量 ============
 DISCOVERY_PORT = 50008      # UDP 设备发现端口
@@ -58,6 +59,18 @@ def get_device_name():
         return socket.gethostname()
     except Exception:
         return 'Unknown'
+
+
+def get_received_dir():
+    """获取接收文件的保存目录。
+    在Android上使用公共Downloads目录以便用户直接访问；
+    在其他平台上使用当前目录下的 received_files 文件夹。
+    """
+    if kivy_platform == 'android':
+        # Android: 保存到公共 Downloads/TrustChat 目录
+        return '/sdcard/Download/TrustChat'
+    else:
+        return 'received_files'
 
 
 def format_file_size(size_bytes):
@@ -110,7 +123,7 @@ class NetworkManager:
         self._connect_lock = threading.Lock()
 
         # 接收文件保存目录
-        self.received_dir = 'received_files'
+        self.received_dir = get_received_dir()
 
     # ========== 启动/停止 ==========
 
