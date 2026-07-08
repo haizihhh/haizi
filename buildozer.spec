@@ -22,7 +22,7 @@ source.include_patterns = network.py
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = hostpython3==3.11,python3==3.11,kivy==2.3.0
+requirements = hostpython3,python3,kivy==2.3.0
 
 # (str) Supported orientation (one of landscape, portrait or all)
 orientation = portrait
