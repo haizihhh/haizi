@@ -127,37 +127,41 @@ jobs:
               with open(thorvg_path) as f:
                   thorvg_content = f.read()
 
-              # Replace the fragile glob()[0] with a robust multi-pattern search
-              old_block = '''            pattern = join(self.ctx.ndk.llvm_prebuilt_dir, "lib/clang/*/lib/linux", lib_arch)
-              clang_lib_dir = glob(pattern)[0]
-              libomp = join(clang_lib_dir, "libomp.so")
-              shprint(sh.cp, libomp, join("install", "lib"))'''
-
-              new_block = '''            # Try multiple patterns to find libomp.so (NDK path varies by version)
-              patterns = [
-                  join(self.ctx.ndk.llvm_prebuilt_dir, "lib/clang/*/lib/linux", lib_arch, "libomp.so"),
-                  join(self.ctx.ndk.llvm_prebuilt_dir, "lib64/clang/*/lib/linux", lib_arch, "libomp.so"),
-                  join(self.ctx.ndk.llvm_prebuilt_dir, "lib", lib_arch + "-linux-android", "libomp.so"),
-              ]
-              libomp = None
-              for pat in patterns:
-                  matches = glob(pat)
-                  if matches:
-                      libomp = matches[0]
-                      print(f"  Found libomp.so: {libomp}")
-                      break
-              if libomp:
-                  shprint(sh.cp, libomp, join("install", "lib"))
-              else:
-                  print("  WARNING: libomp.so not found, skipping OpenMP copy")'''
-
-              if old_block in thorvg_content:
-                  thorvg_content = thorvg_content.replace(old_block, new_block)
+              # Patch libthorvg: replace fragile glob()[0] with resilient search
+              # Use regex to find and replace - avoids whitespace mismatch issues
+              old_pattern = (
+                  r'pattern = join\(self\.ctx\.ndk\.llvm_prebuilt_dir, '
+                  r'"lib/clang/\*/lib/linux", lib_arch\)\s*\n'
+                  r'\s*clang_lib_dir = glob\(pattern\)\[0\]\s*\n'
+                  r'\s*libomp = join\(clang_lib_dir, "libomp\.so"\)\s*\n'
+                  r'\s*shprint\(sh\.cp, libomp, join\("install", "lib"\)\)'
+              )
+              replacement = (
+                  '# Try multiple patterns to find libomp.so (NDK path varies by version)\n'
+                  '            patterns = [\n'
+                  '                join(self.ctx.ndk.llvm_prebuilt_dir, "lib/clang/*/lib/linux", lib_arch, "libomp.so"),\n'
+                  '                join(self.ctx.ndk.llvm_prebuilt_dir, "lib64/clang/*/lib/linux", lib_arch, "libomp.so"),\n'
+                  '                join(self.ctx.ndk.llvm_prebuilt_dir, "lib", lib_arch + "-linux-android", "libomp.so"),\n'
+                  '            ]\n'
+                  '            libomp = None\n'
+                  '            for pat in patterns:\n'
+                  '                matches = glob(pat)\n'
+                  '                if matches:\n'
+                  '                    libomp = matches[0]\n'
+                  '                    print(f"  Found libomp.so: {libomp}")\n'
+                  '                    break\n'
+                  '            if libomp:\n'
+                  '                shprint(sh.cp, libomp, join("install", "lib"))\n'
+                  '            else:\n'
+                  '                print("  WARNING: libomp.so not found, skipping OpenMP copy")'
+              )
+              if re.search(old_pattern, thorvg_content):
+                  thorvg_content = re.sub(old_pattern, replacement, thorvg_content)
                   with open(thorvg_path, 'w') as f:
                       f.write(thorvg_content)
                   print("  PATCHED libthorvg: libomp.so glob now resilient")
               else:
-                  print("  WARNING: libthorvg code block not matched, skipping patch")
+                  print("  WARNING: libthorvg pattern not matched, skipping patch")
           else:
               print("  SKIP libthorvg: recipe not found")
 
