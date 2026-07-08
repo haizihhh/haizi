@@ -46,9 +46,15 @@ jobs:
           fi
           echo "Full version: $FULL_VERSION"
 
-          # Clone python-for-android and patch recipe versions
-          P4A_DIR="$HOME/.buildozer/android/platform/python-for-android"
+          # Pre-populate python-for-android at the WORKSPACE path that
+          # buildozer actually uses (not $HOME/.buildozer).
+          # Buildozer skips cloning if this directory already exists.
+          P4A_DIR=".buildozer/android/platform/python-for-android"
           mkdir -p "$(dirname "$P4A_DIR")"
+          if [ -d "$P4A_DIR" ]; then
+            echo "Removing stale p4a clone..."
+            rm -rf "$P4A_DIR"
+          fi
           git clone --depth 1 -b develop https://github.com/kivy/python-for-android.git "$P4A_DIR"
 
           for recipe in hostpython3 python3; do
