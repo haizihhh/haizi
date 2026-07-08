@@ -23,6 +23,13 @@ jobs:
             pkg-config zlib1g-dev libncurses-dev cmake \
             libffi-dev libssl-dev python3-pip
 
+          # Ubuntu 24.04 ships libtool 2.4.7 which removed LT_SYS_SYMBOL_USCORE.
+          # p4a's libffi recipe needs this macro. Replace with libtool 2.4.6 from 22.04.
+          wget -q "http://archive.ubuntu.com/ubuntu/pool/main/libt/libtool/libtool_2.4.6-15build2_all.deb" \
+               -O /tmp/old-libtool.deb
+          sudo dpkg -i --force-depends /tmp/old-libtool.deb
+          rm /tmp/old-libtool.deb
+
       - name: Install Buildozer
         run: pip install buildozer
 
